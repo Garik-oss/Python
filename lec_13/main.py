@@ -2,7 +2,7 @@ import time
 import random
 import string
 from threading import Thread
-from multiprocessing import Process, Lock
+from multiprocessing import Process, Lock, Manager
 
 # Function to generate a large text file with random words
 def generate_large_file(filename, num_words=1000000):
@@ -24,17 +24,17 @@ def count_words_sequential(filename):
 
 # Function to count words in chunks for multithreading
 def count_words_threaded_chunk(filename, start, end, word_count, lock):
-    local_word_count = {}
-    with open(filename, 'r') as file:
-        file.seek(start)
-        while file.tell() < end:
-            line = file.readline()
-            for word in line.split():
-                local_word_count[word] = local_word_count.get(word, 0) + 1
-    # Lock to safely update the word count
-    with lock:
-        for word, count in local_word_count.items():
-            word_count[word] = word_count.get(word, 0) + count
+  local_word_count = {}
+  with open(filename, 'r') as file:
+      file.seek(start)
+      while file.tell() < end:
+          line = file.readline()
+          for word in line.split():
+              local_word_count[word] = local_word_count.get(word, 0) + 1
+  # Lock to safely update the word count
+  with lock:
+      for word, count in local_word_count.items():
+          word_count[word] = word_count.get(word, 0) + count
 
 # Multithreading word count function
 def count_words_multithreaded(filename):
@@ -43,13 +43,15 @@ def count_words_multithreaded(filename):
     threads = []
     
     with open(filename, 'r') as file:
+        file.seek(0, 2)
         file_size = file.tell()
+        file.seek(0)
         num_threads = 4  # Number of threads (you can increase this)
         chunk_size = file_size // num_threads
         start_pos = 0
         
         for i in range(num_threads):
-            end_pos = start_pos + chunk_size if i < num_threads - 1 else file_size
+            end_pos = start_pos + chunk_size if (i < num_threads - 1) else file_size
             thread = Thread(target=count_words_threaded_chunk, args=(filename, start_pos, end_pos, word_count, lock))
             threads.append(thread)
             thread.start()
@@ -75,12 +77,16 @@ def count_words_multiprocessing_chunk(filename, start, end, word_count_dict, ind
 
 # Multiprocessing word count function
 def count_words_multiprocessing(filename):
-    word_count_dict = {}
+  
+  with Manager() as manager:
+    word_count_dict = manager.dict()
     lock = Lock()
     processes = []
     
     with open(filename, 'r') as file:
+        file.seek(0, 2)
         file_size = file.tell()
+        file.seek(0)
         num_processes = 4  # Number of processes (you can increase this)
         chunk_size = file_size // num_processes
         start_pos = 0
@@ -117,17 +123,17 @@ if __name__ == '__main__':
     # Test sequential approach
     print("Testing Sequential Approach...")
     word_count_sequential, time_sequential = time_function(count_words_sequential, filename)
-    print(f"Sequential Time: {time_sequential:.4f} seconds")
+    print(f"Sequential Time: {time_sequential:.4f} seconds. count = {len(word_count_sequential)}")
 
     # Test multithreading approach
     print("\nTesting Multithreading Approach...")
     word_count_threaded, time_threaded = time_function(count_words_multithreaded, filename)
-    print(f"Multithreading Time: {time_threaded:.4f} seconds")
+    print(f"Multithreading Time: {time_threaded:.4f} seconds. count = {len(word_count_threaded)}")
 
     # Test multiprocessing approach
     print("\nTesting Multiprocessing Approach...")
     word_count_multiprocessing, time_multiprocessing = time_function(count_words_multiprocessing, filename)
-    print(f"Multiprocessing Time: {time_multiprocessing:.4f} seconds")
+    print(f"Multiprocessing Time: {time_multiprocessing:.4f} seconds. count = {len(word_count_multiprocessing)}")
 
     # Speedup calculations
     speedup_threaded = time_sequential / time_threaded
